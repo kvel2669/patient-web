@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Patient List</title>
+  <style>
+    body { font-family: sans-serif; padding: 1rem; }
+    .loading { font-style: italic; }
+    .error   { color: red; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 0.5rem;
+      text-align: left;
+    }
+    th {
+      background: #f4f4f4;
+    }
+    button {
+      padding: 0.25rem 0.5rem;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>Patient Records</h1>
+  <div id="api-output" class="loading">Loading data…</div>
+
+  <script>
+    const API_URL = 'http://localhost:8080/api/patient';
+
+    // 1. Fetch records and render table
+    (async function() {
+      const output = document.getElementById('api-output');
+      try {
+        const res = await fetch(API_URL);
+        if (!res.ok) throw new Error(`Server error: ${res.status}`);
+        const patients = await res.json();
+        renderTable(patients);
+      } catch (err) {
+        showError(err);
+      }
+    })();
+
+    // 2. Delete handler
+    async function handleDelete(id) {
+      if (!confirm('Delete this patient?')) return;
+      try {
+        const res = await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
+        console.log(`Delete request for ID ${id} sent`);
+        if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
+        document.querySelector(`tr[data-id="${id}"]`)?.remove();
+      } catch (err) {
+        alert(`Could not delete: ${err.message}`);
+      }
+    }
+
+    // 3. Build table with “Actions” column
+    function renderTable(data) {
+      const output = document.getElementById('api-output');
+      output.classList.remove('loading');
+      output.textContent = '';
+
+      if (!Array.isArray(data) || data.length === 0) {
+        output.textContent = 'No patient records found.';
+        return;
+      }
+
+      const table = document.createElement('table');
+      const thead = document.createElement('thead');
+      const headerRow = document.createElement('tr');
+
+      ['ID', 'Name', 'Age', 'Email', 'Mobile Number', 'Actions']
+        .forEach(text => {
+          const th = document.createElement('th');
+          th.textContent = text;
+          headerRow.appendChild(th);
+        });
+
+      thead.appendChild(headerRow);
+      table.appendChild(thead);
+
+      const tbody = document.createElement('tbody');
+      data.forEach(p => {
+        const tr = document.createElement('tr');
+        tr.dataset.id = p.id;
+
+        ['id','name','age','email','mobileNumber']
+          .forEach(key => {
+            const td = document.createElement('td');
+            td.textContent = p[key];
+            tr.appendChild(td);
+          });
+
+        const actionTd = document.createElement('td');
+        const btn = document.createElement('button');
+        btn.textContent = 'Delete';
+        btn.addEventListener('click', () => handleDelete(p.id));
+        actionTd.appendChild(btn);
+        tr.appendChild(actionTd);
+
+        tbody.appendChild(tr);
+      });
+
+      table.appendChild(tbody);
+      output.appendChild(table);
+    }
+
+    // 4. Error display
+    function showError(err) {
+      const output = document.getElementById('api-output');
+      output.classList.remove('loading');
+      output.innerHTML = `<p class="error">Failed to load data: ${err.message}</p>`;
+    }
+  </script>
+</body>
+</html>
