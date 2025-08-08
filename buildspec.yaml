@@ -6,7 +6,6 @@ phases:
       java: corretto21
   pre_build:
     commands:
-      - mvn clean install
       - echo Logging in to Amazon ECR...
       - aws --version
       - REPOSITORY_URI=443370701600.dkr.ecr.ap-south-1.amazonaws.com/patient-web-frontend
