@@ -1,0 +1,53 @@
+version: 0.2
+
+env:
+  variables:
+    AWS_ACCOUNT_ID:       "443370701600"     # your AWS account ID
+    AWS_DEFAULT_REGION:   "ap-south-1"        # your region
+    IMAGE_REPO_NAME:      "patient-web-frontend"      # name of your ECR repo
+    CLUSTER_NAME:         "lhs-api"   # your ECS cluster
+    SERVICE_NAME:         "lhs-api-frontend-service-4juxiinf"   # your ECS service
+    CONTAINER_NAME:       "lhs-api" # name matching containerDef in your task
+  # you can override these in CodeBuild project or via CodePipeline action
+
+phases:
+
+  install:
+    runtime-versions:
+      nodejs: 14
+    commands:
+      - echo Installing NPM dependencies…
+      - npm install
+
+  pre_build:
+    commands:
+      - echo Logging in to Amazon ECR…
+      - |
+        aws ecr get-login-password \
+          --region $AWS_DEFAULT_REGION \
+        | docker login \
+            --username AWS \
+            --password-stdin \
+            $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+
+  build:
+    commands:
+      - echo Building the Docker image…
+      - docker build -t $IMAGE_REPO_NAME:$CODEBUILD_RESOLVED_SOURCE_VERSION .
+      - docker tag \
+          $IMAGE_REPO_NAME:$CODEBUILD_RESOLVED_SOURCE_VERSION \
+          $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$CODEBUILD_RESOLVED_SOURCE_VERSION
+
+  post_build:
+    commands:
+      - echo Pushing image to ECR…
+      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$CODEBUILD_RESOLVED_SOURCE_VERSION
+      - echo Writing imagedefinitions.json…
+      - printf '[{"name":"%s","imageUri":"%s"}]' \
+          "$CONTAINER_NAME" \
+          "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$CODEBUILD_RESOLVED_SOURCE_VERSION" \
+        > imagedefinitions.json
+
+artifacts:
+  files:
+    - imagedefinitions.json
