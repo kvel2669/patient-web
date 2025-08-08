@@ -1,47 +1,39 @@
 version: 0.2
 
-env:
-  variables:
-    AWS_ACCOUNT_ID:       "443370701600"     # your AWS account ID
-    AWS_DEFAULT_REGION:   "ap-south-1"        # your region
-    IMAGE_REPO_NAME:      "patient-web-frontend"      # name of your ECR repo
-    CLUSTER_NAME:         "lhs-api"   # your ECS cluster
-    SERVICE_NAME:         "lhs-api-frontend-service-4juxiinf"   # your ECS service
-    CONTAINER_NAME:       "lhs-api" # name matching containerDef in your task
-  # you can override these in CodeBuild project or via CodePipeline action
-
 phases:
-
   install:
     runtime-versions:
-      nodejs: 14
-    commands:
-      - echo Installing NPM dependencies…
-      - npm install
-
+      java: corretto21
   pre_build:
     commands:
+      - mvn clean install
+      - echo Logging in to Amazon ECR...
+      - aws --version
       - REPOSITORY_URI=443370701600.dkr.ecr.ap-south-1.amazonaws.com/patient-web-frontend
-      - echo Logging in to Amazon ECR…
       - aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin $REPOSITORY_URI
-
+      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      - IMAGE_TAG=build-$(echo $CODEBUILD_BUILD_ID | awk -F":" '{print $2}')
   build:
     commands:
-      - echo Building the Docker image…
-      - docker build -t $IMAGE_REPO_NAME:$CODEBUILD_RESOLVED_SOURCE_VERSION .
-      - docker tag \
-          $IMAGE_REPO_NAME:$CODEBUILD_RESOLVED_SOURCE_VERSION \
-          $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$CODEBUILD_RESOLVED_SOURCE_VERSION
-
+      - echo Build started on `date`
+      - echo Building the Docker image...
+      - docker build -t $REPOSITORY_URI:latest .
+      - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:$IMAGE_TAG
   post_build:
     commands:
-      - echo Pushing image to ECR…
-      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$CODEBUILD_RESOLVED_SOURCE_VERSION
-      - echo Writing imagedefinitions.json…
-      - printf '[{"name":"%s","imageUri":"%s"}]' \
-          "$CONTAINER_NAME" \
-          "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$CODEBUILD_RESOLVED_SOURCE_VERSION" \
-        > imagedefinitions.json
+      - echo Build completed on `date`
+      - echo Pushing the Docker images...
+      - docker push $REPOSITORY_URI:latest
+      - docker push $REPOSITORY_URI:$IMAGE_TAG
+      - echo Writing image definitions file...
+      - printf '[{"name":"lhs-fontend-api","imageUri":"%s"}]' $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+      - echo Writing image definitions file...
+      # add your container name
+      - DOCKER_CONTAINER_NAME=lhs-fontend-api
+      - printf '[{"name":"%s","imageUri":"%s"}]' $DOCKER_CONTAINER_NAME $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+      - echo $DOCKER_CONTAINER_NAME
+      - echo printing imagedefinitions.json
+      - cat imagedefinitions.json
 
 artifacts:
   files:
